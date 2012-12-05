@@ -21,6 +21,7 @@ def json_error(status=400, location='body', name='', description='', **kw):
         return cornice_error(errors)
 
 account_create = Service(name='', path='/account/create', description="Firefox Accounts Protocol Server")
+account_info = Service(name='', path='/account/info', description="Firefox Accounts Protocol Server")
 key_uk_get = Service(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
 key_uk_put = Service(name='', path='/key/uk/put', description="Firefox Accounts Protocol Server")
 
@@ -108,6 +109,25 @@ def valid_user(request):
         raise exc.HTTPUnauthorized()
 
     request.validated['account'] = account
+
+def valid_email(request):
+    valid_key('email')(request)
+
+    email = request.validated['email']
+
+    if email not in _ACCOUNTS:
+        raise exc.HTTPNotFound()
+
+    account = _ACCOUNTS[email]
+
+    request.validated['account'] = account
+
+@account_info.post(validators=[valid_message, valid_key('email'), valid_email])
+def _(request):
+    account = request.validated['account']
+
+    return {'email': account['email'],
+            'salt': account['salt'] }
 
 @key_uk_put.post(validators=[valid_message, valid_user, valid_key('key')])
 def _(request):

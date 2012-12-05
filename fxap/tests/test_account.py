@@ -39,6 +39,18 @@ class TestAccount(unittest.TestCase):
         res = self._create()
         assert res.json['email'] == self.email
 
+    def test_info(self):
+        body = {}
+        body['email'] = self.email
+
+        res = self.post_unauth('/account/info', body, status=404)
+
+        res = self._create()
+        assert res.json['email'] == self.email
+
+        res = self.post_unauth('/account/info', body)
+        assert res.json['salt'] == self.salt
+
     def test_already_used(self):
         res = self._create()
         assert res.json['email'] == self.email
