@@ -11,10 +11,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-
 .. services::
-   :modules: views, fxap.views, fxap.fxap.views
-   .. :services: entropy, get_entropy, sign_key, create_account
+   :modules: fxap.views
 
 Indices and tables
 ==================
