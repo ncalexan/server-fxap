@@ -1,0 +1,7 @@
+.Python
+*.pyc
+bin
+lib
+include
+fxap.egg-info
+docs/build
