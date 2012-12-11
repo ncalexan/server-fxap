@@ -13,7 +13,7 @@ import os
 import base64
 import json
 
-from webob.exc import HTTPError
+import webob.exc as exc
 
 def json_error(status=400, location='body', name='', description='', **kw):
         errors = Errors(status=status)
@@ -21,6 +21,8 @@ def json_error(status=400, location='body', name='', description='', **kw):
         return cornice_error(errors)
 
 create_account = Service(name='', path='/account/create', description="Firefox Accounts Protocol Server")
+get_uk = Service(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
+put_uk = Service(name='', path='/key/uk/put', description="Firefox Accounts Protocol Server")
 
 _ACCOUNTS = {}
 
@@ -68,6 +70,44 @@ Responses:
         request.errors.status = 409
         return
 
-    _ACCOUNTS[email] = {'salt': salt, 'S1':S1}
+    _ACCOUNTS[email] = {'email': email, 'salt': salt, 'S1':S1}
 
     return {'email': email}
+
+def valid_user(request):
+    valid_key('email')(request)
+    valid_key('S1')(request)
+
+    email = request.validated['email']
+    S1 = request.validated['S1']
+
+    if email not in _ACCOUNTS:
+        raise exc.HTTPUnauthorized()
+
+    account = _ACCOUNTS[email]
+
+    S1 = request.validated['S1']
+    if S1 != account['S1']:
+        raise exc.HTTPUnauthorized()
+
+    request.validated['account'] = account
+
+@put_uk.post(validators=[valid_message, valid_user, valid_key('key')])
+def _(request):
+    r"""
+    """
+    account = request.validated['account']
+    key = request.validated['key']
+
+    account['uk'] = key
+
+@get_uk.post(validators=[valid_message, valid_user])
+def _(request):
+    r"""
+    """
+    account = request.validated['account']
+
+    if 'uk' in account:
+        return {'key': account['uk']}
+    else:
+        raise exc.HTTPNotFound()
