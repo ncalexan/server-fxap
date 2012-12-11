@@ -28,7 +28,7 @@ setup(name='fxap',
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    install_requires=['cornice', 'PasteScript', 'waitress', 'PyBrowserID'],
+    install_requires=['cornice', 'PasteScript', 'waitress', 'PyBrowserID', 'Requests', 'webtest'],
     entry_points = """\
     [paste.app_factory]
     main = fxap:main

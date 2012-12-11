@@ -3,5 +3,6 @@
 bin
 lib
 include
+man
 fxap.egg-info
 docs/build
