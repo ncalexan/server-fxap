@@ -36,7 +36,6 @@ class TestAccount(unittest.TestCase):
         return res
 
     def test_create(self):
-
         res = self._create()
         assert res.json['email'] == self.email
 
@@ -46,7 +45,17 @@ class TestAccount(unittest.TestCase):
 
         self._create(status=409)
 
-    def test_uk_no_acocunt(self):
+    def test_bad_auth(self):
+        res = self._create()
+        assert res.json['email'] == self.email
+
+        body = {}
+        body['email'] = self.email
+        body['S1'] = 'BAD S1 VALUE'
+
+        res = self.post_unauth('/key/uk/get', body, status=401)
+
+    def test_uk_no_account(self):
         res = self.post('/key/uk/get', {}, status=401)
 
     def test_get_no_uk(self):
