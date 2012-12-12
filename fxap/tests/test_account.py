@@ -77,3 +77,42 @@ class TestAccount(unittest.TestCase):
 
         res = self.post('/key/uk/get', {})
         assert res.json['key'] == KEY
+
+    def _device(self, *args, **kw):
+        res = self.post('/token/device/get', {}, *args, **kw)
+        return res
+
+    def test_get_device(self):
+        res = self._create()
+        assert res.json['email'] == self.email
+
+        res = self._device()
+        assert 'device_token' in res.json
+
+    def _service(self, device_token, service, *args, **kw):
+        body = {}
+        body['device_token'] = device_token
+        body['service'] = service
+
+        res = self.post('/token/service/get', body, *args, **kw)
+        return res
+
+    def test_get_service(self):
+        res = self._create()
+        assert res.json['email'] == self.email
+
+        res = self._device()
+        assert 'device_token' in res.json
+        device_token = res.json['device_token']
+
+        res = self._service(device_token, 'sync')
+        assert 'service_token' in res.json
+        service_token = res.json['service_token']
+
+    def test_get_service_bad_device_token(self):
+        res = self._create()
+        assert res.json['email'] == self.email
+
+        bad_device_token = 'BAD DEVICE TOKEN'
+
+        res = self._service(bad_device_token, 'sync', status=401)

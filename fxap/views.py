@@ -20,11 +20,28 @@ def json_error(status=400, location='body', name='', description='', **kw):
         errors.add(location=location, name=name, description=description, **kw)
         return cornice_error(errors)
 
-create_account = Service(name='', path='/account/create', description="Firefox Accounts Protocol Server")
-get_uk = Service(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
-put_uk = Service(name='', path='/key/uk/put', description="Firefox Accounts Protocol Server")
+account_create = Service(name='', path='/account/create', description="Firefox Accounts Protocol Server")
+key_uk_get = Service(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
+key_uk_put = Service(name='', path='/key/uk/put', description="Firefox Accounts Protocol Server")
+
+token_device_get = Service(name='', path='/token/device/get', description="Firefox Accounts Protocol Server")
+token_service_get = Service(name='', path='/token/service/get', description="Firefox Accounts Protocol Server")
 
 _ACCOUNTS = {}
+_DEVICE_TOKEN_COUNTER = 10
+_SERVICE_TOKEN_COUNTER = 40
+
+def get_device_token(account):
+    global _DEVICE_TOKEN_COUNTER
+
+    _DEVICE_TOKEN_COUNTER += 1
+    return "device-%s" % _DEVICE_TOKEN_COUNTER
+
+def get_service_token(account, device_token, service):
+    global _SERVICE_TOKEN_COUNTER
+
+    _SERVICE_TOKEN_COUNTER += 1
+    return "%s-service-%s-%s" % (device_token, service, _SERVICE_TOKEN_COUNTER)
 
 def valid_message(request):
     try:
@@ -45,7 +62,7 @@ def valid_key(key):
 
     return _valid_key
 
-@create_account.post(validators=[valid_message, valid_key('email'), valid_key('salt'), valid_key('S1')])
+@account_create.post(validators=[valid_message, valid_key('email'), valid_key('salt'), valid_key('S1')])
 def _(request):
     r"""/api/create_account
 
@@ -70,7 +87,7 @@ Responses:
         request.errors.status = 409
         return
 
-    _ACCOUNTS[email] = {'email': email, 'salt': salt, 'S1':S1}
+    _ACCOUNTS[email] = {'email': email, 'salt': salt, 'S1':S1, 'device_tokens':[], 'service_tokens':{}}
 
     return {'email': email}
 
@@ -92,7 +109,7 @@ def valid_user(request):
 
     request.validated['account'] = account
 
-@put_uk.post(validators=[valid_message, valid_user, valid_key('key')])
+@key_uk_put.post(validators=[valid_message, valid_user, valid_key('key')])
 def _(request):
     r"""
     """
@@ -101,7 +118,7 @@ def _(request):
 
     account['uk'] = key
 
-@get_uk.post(validators=[valid_message, valid_user])
+@key_uk_get.post(validators=[valid_message, valid_user])
 def _(request):
     r"""
     """
@@ -111,3 +128,39 @@ def _(request):
         return {'key': account['uk']}
     else:
         raise exc.HTTPNotFound()
+
+@token_device_get.post(validators=[valid_message, valid_user])
+def _(request):
+    r"""
+    """
+    account = request.validated['account']
+
+    device_token = get_device_token(account)
+    account['device_tokens'].append(device_token)
+
+    return {'device_token': device_token}
+
+def valid_device(request):
+    valid_key('device_token')(request)
+
+    account = request.validated['account']
+    device_token = request.validated['device_token']
+
+    if device_token not in account['device_tokens']:
+        raise exc.HTTPUnauthorized()
+
+    request.validated['device_token'] = device_token
+
+@token_service_get.post(validators=[valid_message, valid_user, valid_device, valid_key('service')])
+def _(request):
+    r"""
+    """
+    account = request.validated['account']
+    service = request.validated['service']
+    device_token = request.validated['device_token']
+
+    service_token = get_service_token(account, device_token, service)
+
+    account['service_tokens'][(device_token, service)] = service_token
+
+    return {'service_token': service_token}
