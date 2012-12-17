@@ -171,7 +171,7 @@ def valid_device(request):
 
     request.validated['device_token'] = device_token
 
-@token_service_get.post(validators=[valid_message, valid_user, valid_device, valid_key('service')])
+@token_service_get.post(validators=[valid_message, valid_email, valid_device, valid_key('service')])
 def _(request):
     r"""
     """
