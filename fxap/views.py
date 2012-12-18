@@ -9,6 +9,8 @@ from cornice import Service
 from cornice.errors import Errors
 from cornice.util import json_error as cornice_error
 
+from mozsvc.metrics import MetricsService
+
 import os
 import base64
 import json
@@ -20,18 +22,18 @@ def json_error(status=400, location='body', name='', description='', **kw):
         errors.add(location=location, name=name, description=description, **kw)
         return cornice_error(errors)
 
-fxap_reset = Service(name='', path='/fxap/reset', description="Firefox Accounts Protocol Server")
-fxap_info = Service(name='', path='/fxap/info', description="Firefox Accounts Protocol Server")
+fxap_reset = MetricsService(name='', path='/fxap/reset', description="Firefox Accounts Protocol Server")
+fxap_info = MetricsService(name='', path='/fxap/info', description="Firefox Accounts Protocol Server")
 
-account_create = Service(name='', path='/account/create', description="Firefox Accounts Protocol Server")
-account_info = Service(name='', path='/account/info', description="Firefox Accounts Protocol Server")
-key_uk_get = Service(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
-key_uk_put = Service(name='', path='/key/uk/put', description="Firefox Accounts Protocol Server")
+account_create = MetricsService(name='', path='/account/create', description="Firefox Accounts Protocol Server")
+account_info = MetricsService(name='', path='/account/info', description="Firefox Accounts Protocol Server")
+key_uk_get = MetricsService(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
+key_uk_put = MetricsService(name='', path='/key/uk/put', description="Firefox Accounts Protocol Server")
 
-token_device_get = Service(name='', path='/token/device/get', description="Firefox Accounts Protocol Server")
-token_service_get = Service(name='', path='/token/service/get', description="Firefox Accounts Protocol Server")
+token_device_get = MetricsService(name='', path='/token/device/get', description="Firefox Accounts Protocol Server")
+token_service_get = MetricsService(name='', path='/token/service/get', description="Firefox Accounts Protocol Server")
 
-token_sync_get = Service(name='', path='/token/sync/get', description="Firefox Accounts Protocol Server")
+token_sync_get = MetricsService(name='', path='/token/sync/get', description="Firefox Accounts Protocol Server")
 
 _ACCOUNTS = {}
 _DEVICE_TOKEN_COUNTER = 10
@@ -69,7 +71,7 @@ def valid_key(key):
     return _valid_key
 
 @fxap_reset.post(validators=[valid_message, valid_key('password')])
-def _(request):
+def _fxap_reset(request):
     fxap_password = request.registry.settings.get('fxap.password', None)
 
     if fxap_password is None:
@@ -82,7 +84,7 @@ def _(request):
     return {"accounts": _ACCOUNTS}
 
 @fxap_info.post(validators=[valid_message, valid_key('password')])
-def _(request):
+def _fxap_info(request):
     fxap_password = request.registry.settings.get('fxap.password', None)
 
     if fxap_password is None:
@@ -94,7 +96,7 @@ def _(request):
     return {"accounts": _ACCOUNTS}
 
 @account_create.post(validators=[valid_message, valid_key('email'), valid_key('salt'), valid_key('S1')])
-def _(request):
+def _account_create(request):
     r"""/api/create_account
 
 Request parameters:
@@ -153,14 +155,14 @@ def valid_email(request):
     request.validated['account'] = account
 
 @account_info.post(validators=[valid_message, valid_key('email'), valid_email])
-def _(request):
+def get_account_info(request):
     account = request.validated['account']
 
     return {'email': account['email'],
             'salt': account['salt'] }
 
 @key_uk_put.post(validators=[valid_message, valid_user, valid_key('key')])
-def _(request):
+def _key_uk_put(request):
     r"""
     """
     account = request.validated['account']
@@ -169,7 +171,7 @@ def _(request):
     account['uk'] = key
 
 @key_uk_get.post(validators=[valid_message, valid_user])
-def _(request):
+def _key_uk_get(request):
     r"""
     """
     account = request.validated['account']
@@ -180,7 +182,7 @@ def _(request):
         raise exc.HTTPNotFound()
 
 @token_device_get.post(validators=[valid_message, valid_user])
-def _(request):
+def _token_device_get(request):
     r"""
     """
     account = request.validated['account']
@@ -202,7 +204,7 @@ def valid_device_token(request):
     request.validated['device_token'] = device_token
 
 @token_service_get.post(validators=[valid_message, valid_email, valid_device_token, valid_key('service')])
-def _(request):
+def _token_service_get(request):
     r"""
     """
     account = request.validated['account']
@@ -242,7 +244,7 @@ def valid_service_token(request):
     request.validated['device_token'] = device_token
 
 @token_sync_get.post(validators=[valid_message, valid_email, valid_service_token])
-def _(request):
+def _token_sync_get(request):
     r"""
     """
     service_token = request.validated['service']
