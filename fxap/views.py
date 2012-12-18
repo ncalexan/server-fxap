@@ -20,6 +20,9 @@ def json_error(status=400, location='body', name='', description='', **kw):
         errors.add(location=location, name=name, description=description, **kw)
         return cornice_error(errors)
 
+fxap_reset = Service(name='', path='/fxap/reset', description="Firefox Accounts Protocol Server")
+fxap_info = Service(name='', path='/fxap/info', description="Firefox Accounts Protocol Server")
+
 account_create = Service(name='', path='/account/create', description="Firefox Accounts Protocol Server")
 account_info = Service(name='', path='/account/info', description="Firefox Accounts Protocol Server")
 key_uk_get = Service(name='', path='/key/uk/get', description="Firefox Accounts Protocol Server")
@@ -62,6 +65,31 @@ def valid_key(key):
             raise json_error(description='%s parameter is required' % key)
 
     return _valid_key
+
+@fxap_reset.post(validators=[valid_message, valid_key('password')])
+def _(request):
+    fxap_password = request.registry.settings.get('fxap.password', None)
+
+    if fxap_password is None:
+        return exc.HTTPUnauthorized()
+
+    if request.validated['password'] != fxap_password:
+        return exc.HTTPUnauthorized()
+
+    _ACCOUNTS.clear()
+    return {}
+
+@fxap_info.post(validators=[valid_message, valid_key('password')])
+def _(request):
+    fxap_password = request.registry.settings.get('fxap.password', None)
+
+    if fxap_password is None:
+        return exc.HTTPUnauthorized()
+
+    if request.validated['password'] != fxap_password:
+        return exc.HTTPUnauthorized()
+
+    return {"accounts": str(_ACCOUNTS)}
 
 @account_create.post(validators=[valid_message, valid_key('email'), valid_key('salt'), valid_key('S1')])
 def _(request):

@@ -6,9 +6,16 @@
 """
 from pyramid.config import Configurator
 
+from mozsvc.config import get_configurator
+from mozsvc.plugin import load_and_register, load_from_settings
+
+def includeme(config):
+    config.include("cornice")
+    config.include("mozsvc")
+    config.scan("fxap.views")
+    settings = config.registry.settings
 
 def main(global_config, **settings):
-    config = Configurator(settings=settings)
-    config.include("cornice")
-    config.scan("fxap.views")
+    config = get_configurator(global_config, **settings)
+    config.include(includeme)
     return config.make_wsgi_app()

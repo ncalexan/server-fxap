@@ -8,6 +8,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(here, 'README.rst')) as f:
     README = f.read()
 
+requires = ['cornice', 'mozsvc', 'PasteScript', 'waitress', 'PyBrowserID', 'Requests', 'webtest']
 
 setup(name='fxap',
     version=0.1,
@@ -28,7 +29,7 @@ setup(name='fxap',
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    install_requires=['cornice', 'PasteScript', 'waitress', 'PyBrowserID', 'Requests', 'webtest'],
+    install_requires=requires,
     entry_points = """\
     [paste.app_factory]
     main = fxap:main
