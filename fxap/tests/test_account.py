@@ -128,3 +128,25 @@ class TestAccount(unittest.TestCase):
         bad_device_token = 'BAD DEVICE TOKEN'
 
         res = self._service(bad_device_token, 'sync', status=401)
+
+    def test_get_sync_token(self):
+        res = self._create()
+        assert res.json['email'] == self.email
+
+        res = self._device()
+        assert 'device_token' in res.json
+        device_token = res.json['device_token']
+
+        res = self._service(device_token, 'sync')
+        assert 'service_token' in res.json
+        service_token = res.json['service_token']
+
+        body = {}
+        body['email'] = self.email
+        body['service'] = 'sync'
+        body['service_token'] = service_token
+
+        res = self.post_unauth('/token/sync/get', body)
+
+        print res.json
+        assert str(res.json) == ""

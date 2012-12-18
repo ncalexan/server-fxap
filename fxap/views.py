@@ -31,6 +31,8 @@ key_uk_put = Service(name='', path='/key/uk/put', description="Firefox Accounts 
 token_device_get = Service(name='', path='/token/device/get', description="Firefox Accounts Protocol Server")
 token_service_get = Service(name='', path='/token/service/get', description="Firefox Accounts Protocol Server")
 
+token_sync_get = Service(name='', path='/token/sync/get', description="Firefox Accounts Protocol Server")
+
 _ACCOUNTS = {}
 _DEVICE_TOKEN_COUNTER = 10
 _SERVICE_TOKEN_COUNTER = 40
@@ -77,7 +79,7 @@ def _(request):
         return exc.HTTPUnauthorized()
 
     _ACCOUNTS.clear()
-    return {}
+    return {"accounts": _ACCOUNTS}
 
 @fxap_info.post(validators=[valid_message, valid_key('password')])
 def _(request):
@@ -89,7 +91,7 @@ def _(request):
     if request.validated['password'] != fxap_password:
         return exc.HTTPUnauthorized()
 
-    return {"accounts": str(_ACCOUNTS)}
+    return {"accounts": _ACCOUNTS}
 
 @account_create.post(validators=[valid_message, valid_key('email'), valid_key('salt'), valid_key('S1')])
 def _(request):
@@ -188,7 +190,7 @@ def _(request):
 
     return {'device_token': device_token}
 
-def valid_device(request):
+def valid_device_token(request):
     valid_key('device_token')(request)
 
     account = request.validated['account']
@@ -199,7 +201,7 @@ def valid_device(request):
 
     request.validated['device_token'] = device_token
 
-@token_service_get.post(validators=[valid_message, valid_email, valid_device, valid_key('service')])
+@token_service_get.post(validators=[valid_message, valid_email, valid_device_token, valid_key('service')])
 def _(request):
     r"""
     """
@@ -209,6 +211,42 @@ def _(request):
 
     service_token = get_service_token(account, device_token, service)
 
-    account['service_tokens'][(device_token, service)] = service_token
+    if not account['service_tokens'].has_key(service):
+        account['service_tokens'][service] = {}
+
+    account['service_tokens'][service][service_token] = {"device_token":device_token}
 
     return {'service_token': service_token}
+
+def valid_service_token(request):
+    valid_key('service_token')(request)
+    valid_key('service')(request)
+
+    account = request.validated['account']
+    service = request.validated['service']
+    service_token = request.validated['service_token']
+
+    service_tokens = account['service_tokens']
+    if not service_tokens.has_key(service):
+        raise exc.HTTPNotFound("service not authorized")
+
+    fetched_service_tokens = service_tokens[service]
+    if not fetched_service_tokens.has_key(service_token):
+        raise exc.HTTPNotFound("service token not authorized")
+
+    device_token = fetched_service_tokens[service_token]['device_token']
+    if device_token not in account['device_tokens']:
+        raise exc.HTTPUnauthorized("device token not authorized")
+
+    request.validated['service_token'] = service_token
+    request.validated['device_token'] = device_token
+
+@token_sync_get.post(validators=[valid_message, valid_email, valid_service_token])
+def _(request):
+    r"""
+    """
+    service_token = request.validated['service']
+    service_token = request.validated['service_token']
+    device_token = request.validated['device_token']
+
+    return {'service_token': service_token, "device_token": device_token}
