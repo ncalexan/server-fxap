@@ -1,3 +1,4 @@
+# -*- tab-width: 4 -*-
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -10,6 +11,7 @@ from cornice.errors import Errors
 from cornice.util import json_error as cornice_error
 
 from mozsvc.metrics import MetricsService
+from mozsvc.exceptions import BackendError
 
 import os
 import base64
@@ -17,10 +19,12 @@ import json
 
 import webob.exc as exc
 
+from backend import IAccountServerBackend
+
 def json_error(status=400, location='body', name='', description='', **kw):
-        errors = Errors(status=status)
-        errors.add(location=location, name=name, description=description, **kw)
-        return cornice_error(errors)
+    errors = Errors(status=status)
+    errors.add(location=location, name=name, description=description, **kw)
+    return cornice_error(errors)
 
 fxap_reset = MetricsService(name='', path='/fxap/reset', description="Firefox Accounts Protocol Server")
 fxap_info = MetricsService(name='', path='/fxap/info', description="Firefox Accounts Protocol Server")
@@ -34,22 +38,6 @@ token_device_get = MetricsService(name='', path='/token/device/get', description
 token_service_get = MetricsService(name='', path='/token/service/get', description="Firefox Accounts Protocol Server")
 
 token_sync_get = MetricsService(name='', path='/token/sync/get', description="Firefox Accounts Protocol Server")
-
-_ACCOUNTS = {}
-_DEVICE_TOKEN_COUNTER = 10
-_SERVICE_TOKEN_COUNTER = 40
-
-def get_device_token(account):
-    global _DEVICE_TOKEN_COUNTER
-
-    _DEVICE_TOKEN_COUNTER += 1
-    return "device-%s" % _DEVICE_TOKEN_COUNTER
-
-def get_service_token(account, device_token, service):
-    global _SERVICE_TOKEN_COUNTER
-
-    _SERVICE_TOKEN_COUNTER += 1
-    return "%s-service-%s-%s" % (device_token, service, _SERVICE_TOKEN_COUNTER)
 
 def valid_message(request):
     try:
@@ -70,30 +58,30 @@ def valid_key(key):
 
     return _valid_key
 
-@fxap_reset.post(validators=[valid_message, valid_key('password')])
-def _fxap_reset(request):
-    fxap_password = request.registry.settings.get('fxap.password', None)
+# @fxap_reset.post(validators=[valid_message, valid_key('password')])
+# def _fxap_reset(request):
+#     fxap_password = request.registry.settings.get('fxap.password', None)
 
-    if fxap_password is None:
-        return exc.HTTPUnauthorized()
+#     if fxap_password is None:
+#         return exc.HTTPUnauthorized()
 
-    if request.validated['password'] != fxap_password:
-        return exc.HTTPUnauthorized()
+#     if request.validated['password'] != fxap_password:
+#         return exc.HTTPUnauthorized()
 
-    _ACCOUNTS.clear()
-    return {"accounts": _ACCOUNTS}
+#     _ACCOUNTS.clear()
+#     return {"accounts": _ACCOUNTS}
 
-@fxap_info.post(validators=[valid_message, valid_key('password')])
-def _fxap_info(request):
-    fxap_password = request.registry.settings.get('fxap.password', None)
+# @fxap_info.post(validators=[valid_message, valid_key('password')])
+# def _fxap_info(request):
+#     fxap_password = request.registry.settings.get('fxap.password', None)
 
-    if fxap_password is None:
-        return exc.HTTPUnauthorized()
+#     if fxap_password is None:
+#         return exc.HTTPUnauthorized()
 
-    if request.validated['password'] != fxap_password:
-        return exc.HTTPUnauthorized()
+#     if request.validated['password'] != fxap_password:
+#         return exc.HTTPUnauthorized()
 
-    return {"accounts": _ACCOUNTS}
+#     return {"accounts": _ACCOUNTS}
 
 @account_create.post(validators=[valid_message, valid_key('email'), valid_key('salt'), valid_key('S1')])
 def _account_create(request):
@@ -115,12 +103,12 @@ Responses:
     salt = request.validated['salt']
     S1 = request.validated['S1']
 
-    if email in _ACCOUNTS:
-        request.errors.add('body', 'message', 'email already in use')
-        request.errors.status = 409
-        return
+    backend = request.registry.getUtility(IAccountServerBackend)
 
-    _ACCOUNTS[email] = {'email': email, 'salt': salt, 'S1':S1, 'device_tokens':[], 'service_tokens':{}}
+    try:
+        backend.create_account(email, salt, S1)
+    except BackendError as e:
+        raise json_error(409, description=e.msg)
 
     return {'email': email}
 
@@ -131,10 +119,11 @@ def valid_user(request):
     email = request.validated['email']
     S1 = request.validated['S1']
 
-    if email not in _ACCOUNTS:
-        raise exc.HTTPUnauthorized()
+    backend = request.registry.getUtility(IAccountServerBackend)
 
-    account = _ACCOUNTS[email]
+    account = backend.get_account(email)
+    if account is None:
+        raise json_error(404, description="account not found")
 
     S1 = request.validated['S1']
     if S1 != account['S1']:
@@ -147,14 +136,15 @@ def valid_email(request):
 
     email = request.validated['email']
 
-    if email not in _ACCOUNTS:
-        raise exc.HTTPNotFound()
+    backend = request.registry.getUtility(IAccountServerBackend)
 
-    account = _ACCOUNTS[email]
+    account = backend.get_account(email)
+    if account is None:
+        raise json_error(404, description="account not found")
 
     request.validated['account'] = account
 
-@account_info.post(validators=[valid_message, valid_key('email'), valid_email])
+@account_info.post(validators=[valid_message, valid_email])
 def get_account_info(request):
     account = request.validated['account']
 
@@ -187,8 +177,9 @@ def _token_device_get(request):
     """
     account = request.validated['account']
 
-    device_token = get_device_token(account)
-    account['device_tokens'].append(device_token)
+    backend = request.registry.getUtility(IAccountServerBackend)
+
+    device_token = backend.get_device_token(account['email'])
 
     return {'device_token': device_token}
 
@@ -198,8 +189,10 @@ def valid_device_token(request):
     account = request.validated['account']
     device_token = request.validated['device_token']
 
-    if device_token not in account['device_tokens']:
-        raise exc.HTTPUnauthorized()
+    backend = request.registry.getUtility(IAccountServerBackend)
+
+    if not backend.is_valid_device_token(account['email'], device_token):
+        raise json_error(401, 'bad device token')
 
     request.validated['device_token'] = device_token
 
@@ -211,12 +204,9 @@ def _token_service_get(request):
     service = request.validated['service']
     device_token = request.validated['device_token']
 
-    service_token = get_service_token(account, device_token, service)
+    backend = request.registry.getUtility(IAccountServerBackend)
 
-    if not account['service_tokens'].has_key(service):
-        account['service_tokens'][service] = {}
-
-    account['service_tokens'][service][service_token] = {"device_token":device_token}
+    service_token = backend.get_service_token(account['email'], service, device_token)
 
     return {'service_token': service_token}
 
@@ -251,4 +241,5 @@ def _token_sync_get(request):
     service_token = request.validated['service_token']
     device_token = request.validated['device_token']
 
-    return {'service_token': service_token, "device_token": device_token}
+    return {"service_token": service_token,
+            "device_token": device_token}

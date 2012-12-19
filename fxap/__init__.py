@@ -32,6 +32,9 @@ def includeme(config):
 
     config.registry['metlog'] = metlog_wrapper.client
 
+    # initializes the backend
+    load_and_register("fxap", config)
+
 def main(global_config, **settings):
     config = get_configurator(global_config, **settings)
     config.include(includeme)
